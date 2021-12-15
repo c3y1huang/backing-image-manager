@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -261,7 +262,7 @@ func (s *Service) exportFromVolume(parameters map[string]string) error {
 	}
 	senderAddress := parameters[types.DataSourceTypeExportFromVolumeParameterSenderAddress]
 	if senderAddress == "" {
-		return fmt.Errorf("avaialble replica address of the source volume is not specified during volume exporting")
+		return fmt.Errorf("available replica address of the source volume is not specified during volume exporting")
 	}
 
 	qcow2ConversionRequired := false
@@ -282,6 +283,19 @@ func (s *Service) exportFromVolume(parameters map[string]string) error {
 	if podIP == "" {
 		return fmt.Errorf("can't get pod ip from environment variable")
 	}
+	// we assume the secondary network interface will be the storage-network
+	localIPs, err := getLocalIPs()
+	if err != nil {
+		s.log.WithError(err).Errorf("can't determine if pod have secondary network interface")
+	}
+	dataIP := podIP
+	for _, ip := range localIPs {
+		if ip == podIP {
+			continue
+		}
+		dataIP = ip
+	}
+	s.log.Infof("Export volume via IP %v", dataIP)
 
 	s.lock.Lock()
 	s.size = size
@@ -336,7 +350,7 @@ func (s *Service) exportFromVolume(parameters map[string]string) error {
 			senderErr = errors.Wrapf(err, "failed to get replica client %v", senderAddress)
 			return
 		}
-		if err := replicaClient.ExportVolume(snapshotName, podIP, types.DefaultVolumeExportReceiverPort, true); err != nil {
+		if err := replicaClient.ExportVolume(snapshotName, dataIP, types.DefaultVolumeExportReceiverPort, true); err != nil {
 			senderErr = errors.Wrapf(err, "failed to export volume snapshot %v", snapshotName)
 			return
 		}
@@ -466,4 +480,19 @@ func (s *Service) Get(writer http.ResponseWriter, request *http.Request) {
 	}
 	writer.Header().Set("Content-Type", "application/json")
 	writer.Write(outgoingJSON)
+}
+
+func getLocalIPs() (ips []string, err error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ips, err
+	}
+	for _, address := range addrs {
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				ips = append(ips, ipnet.IP.String())
+			}
+		}
+	}
+	return ips, nil
 }
