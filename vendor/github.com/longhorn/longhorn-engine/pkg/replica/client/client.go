@@ -61,21 +61,29 @@ func (c *ReplicaClient) Close() error {
 	return nil
 }
 
-func NewReplicaClient(address string) (*ReplicaClient, error) {
-	replicaServiceURL := util.GetGRPCAddress(address)
-	host, strPort, err := net.SplitHostPort(replicaServiceURL)
+func NewReplicaClient(address types.Address) (replicaClient *ReplicaClient, err error) {
+	storageHost := ""
+	if address.Storage != "" {
+		storageURL := util.GetGRPCAddress(address.Storage)
+		storageHost, _, err = net.SplitHostPort(storageURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid replica address %s, must have a port in it", storageURL)
+		}
+	}
+
+	replicaServiceURL := util.GetGRPCAddress(address.Cluster)
+	clusterHost, clusterPort, err := net.SplitHostPort(replicaServiceURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid replica address %s, must have a port in it", replicaServiceURL)
 	}
-
-	port, err := strconv.Atoi(strPort)
+	port, err := strconv.Atoi(clusterPort)
 	if err != nil {
 		return nil, err
 	}
-	syncAgentServiceURL := net.JoinHostPort(host, strconv.Itoa(port+2))
+	syncAgentServiceURL := net.JoinHostPort(clusterHost, strconv.Itoa(port+2))
 
 	return &ReplicaClient{
-		host:                host,
+		host:                storageHost,
 		replicaServiceURL:   replicaServiceURL,
 		syncAgentServiceURL: syncAgentServiceURL,
 	}, nil
@@ -85,6 +93,7 @@ func NewReplicaClient(address string) (*ReplicaClient, error) {
 // for the longhorn-manager which executes these command as binaries invocations
 func (c *ReplicaClient) getReplicaServiceClient() (ptypes.ReplicaServiceClient, error) {
 	err := c.replicaServiceContext.once.Do(func() error {
+		util.LogTraffic("client", "replica", c.replicaServiceURL)
 		cc, err := grpc.Dial(c.replicaServiceURL, grpc.WithInsecure())
 		if err != nil {
 			return err
@@ -105,6 +114,7 @@ func (c *ReplicaClient) getReplicaServiceClient() (ptypes.ReplicaServiceClient, 
 // for the longhorn-manager which executes these command as binaries invocations
 func (c *ReplicaClient) getSyncServiceClient() (ptypes.SyncAgentServiceClient, error) {
 	err := c.syncServiceContext.once.Do(func() error {
+		util.LogTraffic("client", "sync", c.syncAgentServiceURL)
 		cc, err := grpc.Dial(c.syncAgentServiceURL, grpc.WithInsecure())
 		if err != nil {
 			return err
@@ -480,7 +490,7 @@ func (c *ReplicaClient) SyncFiles(fromAddress string, list []types.SyncFileInfo)
 
 	if _, err := syncAgentServiceClient.FilesSync(ctx, &ptypes.FilesSyncRequest{
 		FromAddress:      fromAddress,
-		ToHost:           c.host,
+		ToHost:           c.replicaServiceURL + "," + c.host,
 		SyncFileInfoList: syncFileInfoListToSyncAgentGRPCFormat(list),
 	}); err != nil {
 		return fmt.Errorf("failed to sync files %+v from %v: %v", list, fromAddress, err)
@@ -647,7 +657,7 @@ func (c *ReplicaClient) ReplicaRebuildStatus() (*ptypes.ReplicaRebuildStatusResp
 	return status, nil
 }
 
-func (c *ReplicaClient) CloneSnapshot(fromAddress, snapshotFileName string, exportBackingImageIfExist bool) error {
+func (c *ReplicaClient) CloneSnapshot(fromAddress types.Address, snapshotFileName string, exportBackingImageIfExist bool) error {
 	syncAgentServiceClient, err := c.getSyncServiceClient()
 	if err != nil {
 		return err
@@ -656,8 +666,8 @@ func (c *ReplicaClient) CloneSnapshot(fromAddress, snapshotFileName string, expo
 	defer cancel()
 
 	if _, err := syncAgentServiceClient.SnapshotClone(ctx, &ptypes.SnapshotCloneRequest{
-		FromAddress:               fromAddress,
-		ToHost:                    c.host,
+		FromAddress:               fromAddress.Cluster + "," + fromAddress.Storage,
+		ToHost:                    c.replicaServiceURL + "," + c.host,
 		SnapshotFileName:          snapshotFileName,
 		ExportBackingImageIfExist: exportBackingImageIfExist,
 	}); err != nil {

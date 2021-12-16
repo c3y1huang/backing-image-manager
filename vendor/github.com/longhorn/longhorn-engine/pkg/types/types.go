@@ -68,7 +68,7 @@ type Backend interface {
 }
 
 type BackendFactory interface {
-	Create(address string) (Backend, error)
+	Create(address Address) (Backend, error)
 }
 
 type Controller interface {
@@ -92,7 +92,7 @@ type ProcessState string
 type State string
 
 type Replica struct {
-	Address string
+	Address Address
 	Mode    Mode
 }
 

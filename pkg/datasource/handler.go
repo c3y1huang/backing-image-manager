@@ -17,6 +17,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/longhorn/longhorn-engine/pkg/replica/client"
+	engineUtil "github.com/longhorn/longhorn-engine/pkg/util"
 	sparserest "github.com/longhorn/sparse-tools/sparse/rest"
 
 	"github.com/longhorn/backing-image-manager/api"
@@ -345,7 +346,12 @@ func (s *Service) exportFromVolume(parameters map[string]string) error {
 			errChan <- senderErr
 			close(errChan)
 		}()
-		replicaClient, err := client.NewReplicaClient(senderAddress)
+
+		s.log.Infof("[c-2] %v", senderAddress)
+		address := engineUtil.ParseGRPCAddresses(senderAddress)
+		s.log.Infof("[c-3] %v", address.Cluster)
+		s.log.Infof("[c-4] %v", address.Storage)
+		replicaClient, err := client.NewReplicaClient(address)
 		if err != nil {
 			senderErr = errors.Wrapf(err, "failed to get replica client %v", senderAddress)
 			return

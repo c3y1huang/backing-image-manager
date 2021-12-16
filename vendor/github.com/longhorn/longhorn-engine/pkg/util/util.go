@@ -17,9 +17,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/handlers"
 	iutil "github.com/longhorn/go-iscsi-helper/util"
-	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -39,18 +39,33 @@ const (
 	BlockSizeLinux = 512
 )
 
-func ParseAddresses(name string) (string, string, string, int, error) {
-	host, strPort, err := net.SplitHostPort(name)
+func ParseAddresses(address types.Address) (string, string, string, int, error) {
+	storageHost, _, err := net.SplitHostPort(address.Storage)
 	if err != nil {
-		return "", "", "", 0, fmt.Errorf("Invalid address %s : couldn't find host and port", name)
+		return "", "", "", 0, fmt.Errorf("invalid address %s : couldn't find host and port", address.Storage)
 	}
-
-	port, _ := strconv.Atoi(strPort)
-
-	return net.JoinHostPort(host, strconv.Itoa(port)),
-		net.JoinHostPort(host, strconv.Itoa(port+1)),
-		net.JoinHostPort(host, strconv.Itoa(port+2)),
+	clusterHost, clusterPort, err := net.SplitHostPort(address.Cluster)
+	if err != nil {
+		return "", "", "", 0, fmt.Errorf("invalid address %s : couldn't find host and port", address.Cluster)
+	}
+	port, _ := strconv.Atoi(clusterPort)
+	return net.JoinHostPort(clusterHost, strconv.Itoa(port)),
+		net.JoinHostPort(storageHost, strconv.Itoa(port+1)),
+		net.JoinHostPort(storageHost, strconv.Itoa(port+2)),
 		port + 2, nil
+}
+
+func ParseGRPCAddresses(address string) types.Address {
+	split := strings.Split(address, ",")
+	clusterAddress := split[0]
+	storageAddress := clusterAddress
+	if len(split) > 1 {
+		storageAddress = split[1]
+	}
+	return types.Address{
+		Cluster: clusterAddress,
+		Storage: storageAddress,
+	}
 }
 
 func GetGRPCAddress(address string) string {
@@ -76,7 +91,7 @@ func GetPortFromAddress(address string) (int, error) {
 
 	_, strPort, err := net.SplitHostPort(address)
 	if err != nil {
-		return 0, fmt.Errorf("Invalid address %s, must have a port in it", address)
+		return 0, fmt.Errorf("invalid address %s, must have a port in it", address)
 	}
 
 	port, err := strconv.Atoi(strPort)
@@ -88,7 +103,7 @@ func GetPortFromAddress(address string) (int, error) {
 }
 
 func UUID() string {
-	return uuid.NewV4().String()
+	return uuid.New().String()
 }
 
 func Filter(list []string, check func(string) bool) []string {
@@ -124,6 +139,15 @@ func FilteredLoggingHandler(filteredPaths map[string]struct{}, writer io.Writer,
 	}
 }
 
+func LogTraffic(action, service, addr string) {
+	f := logrus.Fields{
+		"traffic-service": service,
+		"action":          action,
+		"addr":            addr,
+	}
+	logrus.WithFields(f).Debug("Connecting")
+}
+
 func (h filteredLoggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
@@ -138,15 +162,15 @@ func (h filteredLoggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Reque
 func DuplicateDevice(src, dest string) error {
 	stat := unix.Stat_t{}
 	if err := unix.Stat(src, &stat); err != nil {
-		return fmt.Errorf("Cannot duplicate device because cannot find %s: %v", src, err)
+		return fmt.Errorf("cannot duplicate device because cannot find %s: %v", src, err)
 	}
 	major := int(stat.Rdev / 256)
 	minor := int(stat.Rdev % 256)
 	if err := mknod(dest, major, minor); err != nil {
-		return fmt.Errorf("Cannot duplicate device %s to %s", src, dest)
+		return fmt.Errorf("cannot duplicate device %s to %s", src, dest)
 	}
 	if err := os.Chmod(dest, 0660); err != nil {
-		return fmt.Errorf("Couldn't change permission of the device %s: %s", dest, err)
+		return fmt.Errorf("couldn't change permission of the device %s: %s", dest, err)
 	}
 	return nil
 }
@@ -163,7 +187,7 @@ func mknod(device string, major, minor int) error {
 func RemoveDevice(dev string) error {
 	if _, err := os.Stat(dev); err == nil {
 		if err := remove(dev); err != nil {
-			return fmt.Errorf("Failed to removing device %s, %v", dev, err)
+			return fmt.Errorf("failed to removing device %s, %v", dev, err)
 		}
 	}
 	return nil
@@ -273,10 +297,10 @@ func GetBackupCredential(backupURL string) (map[string]string, error) {
 		accessKey := os.Getenv(types.AWSAccessKey)
 		secretKey := os.Getenv(types.AWSSecretKey)
 		if accessKey == "" && secretKey != "" {
-			return nil, errors.New("Could not backup to s3 without setting credential access key")
+			return nil, errors.New("could not backup to s3 without setting credential access key")
 		}
 		if accessKey != "" && secretKey == "" {
-			return nil, errors.New("Could not backup to s3 without setting credential secret access key")
+			return nil, errors.New("could not backup to s3 without setting credential secret access key")
 		}
 		if accessKey != "" && secretKey != "" {
 			credential[types.AWSAccessKey] = accessKey

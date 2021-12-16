@@ -48,12 +48,17 @@ type VolumeInfo struct {
 }
 
 type ControllerReplicaInfo struct {
-	Address string `json:"address"`
-	Mode    Mode   `json:"mode"`
+	Address Address `json:"address"`
+	Mode    Mode    `json:"mode"`
 }
 
 type SyncFileInfo struct {
 	FromFileName string `json:"fromFileName"`
 	ToFileName   string `json:"toFileName"`
 	ActualSize   int64  `json:"actualSize"`
+}
+
+type Address struct {
+	Cluster string
+	Storage string
 }
