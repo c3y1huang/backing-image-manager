@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"github.com/sirupsen/logrus"
 
 	"github.com/longhorn/sparse-tools/sparse"
 	sparserest "github.com/longhorn/sparse-tools/sparse/rest"
@@ -45,6 +46,7 @@ func (d *BackingImageHandler) InitProcessing() error {
 }
 
 func (d *BackingImageHandler) Receive(port string, filePath string, syncFileOps sparserest.SyncFileOperations) error {
+	logrus.Infof("[c-30]")
 	d.Lock()
 	if d.isProcessing {
 		d.Unlock()
@@ -63,7 +65,9 @@ func (d *BackingImageHandler) Receive(port string, filePath string, syncFileOps 
 		d.Cancel()
 	}()
 
+	logrus.Infof("[c-31]")
 	if err := d.HandlerEngine.ReceiverLaunch(ctx, port, filePath, syncFileOps); err != nil && err != http.ErrServerClosed {
+		logrus.Infof("[c-32]")
 		return err
 	}
 	return nil
@@ -71,6 +75,7 @@ func (d *BackingImageHandler) Receive(port string, filePath string, syncFileOps 
 
 // Send should fail once the receiver is closed or the timeout is reached.
 func (d *BackingImageHandler) Send(filePath string, address string) error {
+	logrus.Infof("[c-37]")
 	if d.isProcessingInitialized() {
 		return fmt.Errorf("handler cannot send files when the pulling or receiving is still in progress")
 	}

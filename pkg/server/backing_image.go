@@ -231,6 +231,7 @@ func (bi *BackingImage) Send(address string, portAllocateFunc func(portCount int
 			}
 		}()
 
+		logrus.Infof("[c-38] %v", address)
 		if err := bi.handler.Send(filepath.Join(bi.WorkDirectory, types.BackingImageFileName), address); err != nil {
 			log.WithError(err).Errorf("Backing Image: failed to send backing image to address %v", address)
 			return
@@ -290,6 +291,7 @@ func (bi *BackingImage) Fetch(sourceFileName string) (err error) {
 	bi.log = log
 
 	err = os.Rename(sourceFilePath, filepath.Join(bi.WorkDirectory, types.BackingImageTmpFileName))
+	bi.log.Infof("[c-33]")
 	bi.state = types.StateInProgress
 	bi.finishFileProcessingWithoutLock(err)
 
@@ -515,6 +517,7 @@ func (bi *BackingImage) finishFileProcessingWithoutLock(err error) {
 }
 
 func (bi *BackingImage) UpdateSyncFileProgress(size int64) {
+	logrus.Info("[c-35]")
 	updateRequired := false
 	defer func() {
 		if updateRequired {
@@ -526,6 +529,7 @@ func (bi *BackingImage) UpdateSyncFileProgress(size int64) {
 	defer bi.lock.Unlock()
 
 	if bi.state == types.StateStarting {
+		logrus.Info("[c-34]")
 		bi.state = types.StateInProgress
 		updateRequired = true
 	}

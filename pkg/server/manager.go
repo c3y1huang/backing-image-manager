@@ -296,6 +296,7 @@ func (m *Manager) Send(ctx context.Context, req *rpc.SendRequest) (resp *empty.E
 		return nil, status.Errorf(codes.NotFound, "backing image %v not found in the send side", req.Name)
 	}
 
+	logrus.Infof("[c-39] %v", req.ToAddress)
 	if err := bi.Send(req.ToAddress, m.allocatePorts, m.releasePorts); err != nil {
 		return nil, err
 	}

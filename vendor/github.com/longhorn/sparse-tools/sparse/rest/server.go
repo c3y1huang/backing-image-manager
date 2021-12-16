@@ -25,7 +25,7 @@ func TestServer(ctx context.Context, port string, filePath string, timeout int) 
 }
 
 func Server(ctx context.Context, port string, filePath string, syncFileOps SyncFileOperations) error {
-	log.Infof("Creating Ssync service")
+	log.Infof("Creating Ssync service %v", port)
 	ctx, cancelFunc := context.WithCancel(ctx)
 	srv := &http.Server{
 		Addr: ":" + port,

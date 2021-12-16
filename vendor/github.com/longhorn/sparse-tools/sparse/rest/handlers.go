@@ -154,6 +154,7 @@ func (server *SyncServer) getChecksum(writer http.ResponseWriter, request *http.
 }
 
 func (server *SyncServer) doGetChecksum(writer http.ResponseWriter, request *http.Request) error {
+	log.Infof("[c-36]")
 	remoteDataInterval, err := server.getQueryInterval(request)
 	if err != nil {
 		return fmt.Errorf("server.getQueryInterval failed, err: %s", err)

@@ -111,8 +111,10 @@ func (s *Service) init() error {
 	}
 	switch s.sourceType {
 	case types.DataSourceTypeDownload:
+		logrus.Infof("[c-40]")
 		return s.downloadFromURL(s.parameters)
 	case types.DataSourceTypeUpload:
+		logrus.Infof("[c-41]")
 	case types.DataSourceTypeExportFromVolume:
 		return s.exportFromVolume(s.parameters)
 	default:
@@ -168,6 +170,7 @@ func (s *Service) updateProgress(processedSize int64) {
 	defer s.lock.Unlock()
 
 	if s.state == types.StateStarting {
+		logrus.Infof("[c-32]")
 		s.state = types.StateInProgress
 	}
 	if s.state == types.StateReady || s.state == types.StateReadyForTransfer {
